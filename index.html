@@ -965,20 +965,67 @@ function buildAdmin(){
     const ul=Object.keys(S.allUsers);
     if(!ul.length){uCont.appendChild(el('div',{style:{fontSize:'12px',color:'#5a7399'}},'Sin usuarios aún.'));return;}
     ul.forEach(u=>{
-      const del=el('button',{cls:'btn danger sm'},'Eliminar');
-      del.onclick=async()=>{
-        if(!confirm('¿Eliminar a "'+u+'"?'))return;
-        del.disabled=true;
+      const userData=S.allUsers[u]||{};
+      const row=el('div',{style:{padding:'10px 0',borderBottom:'1px solid #dde3ed'}});
+
+      // Top row
+      const topRow=el('div',{style:{display:'flex',alignItems:'center',gap:'8px'}});
+      topRow.appendChild(el('div',{cls:'avatar'},u.slice(0,2).toUpperCase()));
+      topRow.appendChild(el('span',{style:{flex:'1',fontSize:'13px',fontWeight:'700',color:'#1a2b4a'}},u));
+      topRow.appendChild(el('span',{style:{fontSize:'11px',color:'#4a6080'}},Object.keys(S.allPicks[u]||{}).length+' pred.'));
+
+      const passBtn=el('button',{cls:'btn sm',style:{fontSize:'11px'}},'🔑 Pass');
+      const delBtn=el('button',{cls:'btn danger sm'},'Eliminar');
+      topRow.appendChild(passBtn);
+      topRow.appendChild(delBtn);
+      row.appendChild(topRow);
+
+      // Password panel (hidden by default)
+      const passPanel=el('div',{style:{display:'none',marginTop:'8px',padding:'10px',background:'#f8fafc',borderRadius:'8px',border:'1px solid #dde3ed'}});
+      const passDisplay=el('div',{style:{fontSize:'12px',color:'#4a6080',marginBottom:'8px'}},
+        '🔐 Contraseña actual: ',
+        el('span',{style:{color:'#1a2b4a',fontWeight:'700',fontFamily:'monospace'}},userData.password||'—')
+      );
+      passPanel.appendChild(passDisplay);
+
+      const newPassRow=el('div',{style:{display:'flex',gap:'6px'}});
+      const newPassInp=document.createElement('input');
+      newPassInp.type='text';
+      newPassInp.placeholder='Nueva contraseña...';
+      Object.assign(newPassInp.style,{flex:'1',padding:'6px 10px',border:'1px solid #c8d4e4',borderRadius:'6px',background:'#fff',color:'#1a2b4a',fontSize:'12px',fontFamily:'inherit',outline:'none'});
+      const savePassBtn=el('button',{cls:'btn success sm'},'Guardar');
+      savePassBtn.onclick=async()=>{
+        const np=newPassInp.value.trim();
+        if(np.length<4){alert('Mínimo 4 caracteres');return;}
+        savePassBtn.disabled=true;savePassBtn.textContent='...';
+        await setDoc(doc(db,'users',u),{...userData,password:np});
+        S.allUsers[u]={...userData,password:np};
+        passDisplay.querySelector('span').textContent=np;
+        newPassInp.value='';
+        savePassBtn.disabled=false;savePassBtn.textContent='✓ Guardado';
+        setTimeout(()=>savePassBtn.textContent='Guardar',2000);
+      };
+      newPassRow.appendChild(newPassInp);
+      newPassRow.appendChild(savePassBtn);
+      passPanel.appendChild(newPassRow);
+      row.appendChild(passPanel);
+
+      let open=false;
+      passBtn.onclick=()=>{
+        open=!open;
+        passPanel.style.display=open?'block':'none';
+        passBtn.textContent=open?'✕ Cerrar':'🔑 Pass';
+      };
+
+      delBtn.onclick=async()=>{
+        if(!confirm('¿Eliminar a "'+u+'" y sus predicciones?'))return;
+        delBtn.disabled=true;
         await fbDelUser(u);
         delete S.allUsers[u];delete S.allPicks[u];
         buildUsers();
       };
-      uCont.appendChild(el('div',{style:{display:'flex',alignItems:'center',gap:'8px',padding:'10px 0',borderBottom:'1px solid #dde3ed'}},
-        el('div',{cls:'avatar'},u.slice(0,2).toUpperCase()),
-        el('span',{style:{flex:'1',fontSize:'13px',fontWeight:'700',color:'#1a2b4a'}},u),
-        el('span',{style:{fontSize:'11px',color:'#4a6080'}},Object.keys(S.allPicks[u]||{}).length+' pred.'),
-        del
-      ));
+
+      uCont.appendChild(row);
     });
   }
   buildUsers();
