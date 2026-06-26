@@ -47,7 +47,7 @@ input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
 .team-btn{flex:1;padding:12px 8px;border-radius:10px;border:2px solid #dde3ed;background:#f8fafc;cursor:pointer;transition:all .2s;text-align:center;min-width:0;font-family:inherit}
 .team-btn:hover:not(:disabled){border-color:#2563eb;background:#eff6ff}
 .team-btn.sel{border-color:#16a34a;background:#f0fdf4}
-.team-btn:disabled{cursor:not-allowed;opacity:.75}
+.team-btn:disabled{cursor:not-allowed;opacity:.9}
 .flag-img{width:42px;height:28px;object-fit:cover;border-radius:4px;display:block;margin:0 auto 6px;border:1px solid #dde3ed}
 .tname{font-size:12px;color:#1a2b4a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
 .vs-col{display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0}
@@ -633,7 +633,7 @@ function buildPlayoff(){
 
       // T1 button
       const t1b=el('button',{cls:'team-btn'+(p==='t1'?' sel':''),disabled:locked});
-      t1b.appendChild(el('span',{style:{fontSize:'15px',fontWeight:'700',color:p==='t1'?'#4ade80':ok&&r===m.t1?'#4ade80':'#c0d4f0',display:'block',marginBottom:'4px'}},m.t1||'Por definir'));
+      t1b.appendChild(el('span',{style:{fontSize:'15px',fontWeight:'700',color:(p==='t1'||(ok&&r===m.t1))?'#15803d':m.t1?'#1a2b4a':'#94a3b8',display:'block',marginBottom:'4px'}},m.t1||'Por definir'));
       t1b.onclick=async()=>{
         if(!!p||new Date()>new Date(DL_PL[activeR]||DL_PL.r16)||hasR||!m.t1)return;
         plPicks[pickKey]='t1';
@@ -646,7 +646,7 @@ function buildPlayoff(){
 
       // T2 button
       const t2b=el('button',{cls:'team-btn'+(p==='t2'?' sel':''),disabled:locked});
-      t2b.appendChild(el('span',{style:{fontSize:'15px',fontWeight:'700',color:p==='t2'?'#4ade80':ok&&r===m.t2?'#4ade80':'#c0d4f0',display:'block',marginBottom:'4px'}},m.t2||'Por definir'));
+      t2b.appendChild(el('span',{style:{fontSize:'15px',fontWeight:'700',color:(p==='t2'||(ok&&r===m.t2))?'#15803d':m.t2?'#1a2b4a':'#94a3b8',display:'block',marginBottom:'4px'}},m.t2||'Por definir'));
       t2b.onclick=async()=>{
         if(!!p||new Date()>new Date(DL_PL[activeR]||DL_PL.r16)||hasR||!m.t2)return;
         plPicks[pickKey]='t2';
