@@ -972,7 +972,7 @@ function buildAdmin(){
       const topRow=el('div',{style:{display:'flex',alignItems:'center',gap:'8px'}});
       topRow.appendChild(el('div',{cls:'avatar'},u.slice(0,2).toUpperCase()));
       topRow.appendChild(el('span',{style:{flex:'1',fontSize:'13px',fontWeight:'700',color:'#1a2b4a'}},u));
-      topRow.appendChild(el('span',{style:{fontSize:'11px',color:'#4a6080'}},Object.keys(S.allPicks[u]||{}).length+' pred.'));
+      topRow.appendChild(el('span',{style:{fontSize:'11px',color:'#4a6080'}},'G:'+Object.keys(S.allPicks[u]||{}).length+' PO:'+Object.keys(S.allPlPicks[u]||{}).length));
 
       const passBtn=el('button',{cls:'btn sm',style:{fontSize:'11px'}},'🔑 Pass');
       const delBtn=el('button',{cls:'btn danger sm'},'Eliminar');
@@ -1029,11 +1029,4 @@ function buildAdmin(){
     });
   }
   buildUsers();
-  div.appendChild(uCont);
-  return div;
-}
-
-renderApp();
-</script>
-</body>
-</html>
+  div.appendChild(uC
