@@ -844,7 +844,7 @@ function buildTabla(){
       if(sortBy==='playoff')return b.plPts-a.plPts||b.total-a.total;
       return b.total-a.total||b.pred-a.pred;
     });
-    sorted.forEach(({u,total,gPts,plPts,pred},i)=>{
+    sorted.forEach(({u,total,gPts,plPts,spPts,pred},i)=>{
       const icon=i===0?'🥇':i===1?'🥈':i===2?'🥉':'#'+(i+1);
       const mainPts=sortBy==='grupos'?gPts:sortBy==='playoff'?plPts:total;
       const row=el('div',{cls:'lb-row'+(u===S.user.username?' me':'')},
