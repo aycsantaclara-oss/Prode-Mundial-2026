@@ -323,31 +323,33 @@ async function fbResetAllPicks(){const s=await getDocs(collection(db,'picks'));a
 async function fbResetAllPlPicks(){const s=await getDocs(collection(db,'plpicks'));await Promise.all(s.docs.map(d=>deleteDoc(doc(db,'plpicks',d.id))));}
 
 function calcPts(picks,results){
-  let p=0;
-  Object.keys(picks).forEach(id=>{if(results[id]&&picks[id]===results[id])p+=3;});
-  return p;
+  try{let p=0;Object.keys(picks||{}).forEach(id=>{if((results||{})[id]&&picks[id]===(results||{})[id])p+=3;});return p;}catch(e){return 0;}
 }
 function calcPlPts(plPicks,bracket){
-  let p=0;
-  if(!bracket)return p;
-  PL_ROUNDS.forEach(rd=>{
-    const data=bracket[rd.key]||[];
-    data.forEach((m,i)=>{
-      const key=rd.key+'_'+i;
-      const pick=plPicks[key];
-      if(!pick||!m.w)return;
-      if((pick==='t1'&&m.w===m.t1)||(pick==='t2'&&m.w===m.t2))p+=3;
+  try{
+    let p=0;
+    if(!bracket||!plPicks)return 0;
+    PL_ROUNDS.forEach(rd=>{
+      const data=bracket[rd.key]||[];
+      data.forEach((m,i)=>{
+        const key=rd.key+'_'+i;
+        const pick=(plPicks||{})[key];
+        if(!pick||!m||!m.w)return;
+        if((pick==='t1'&&m.w===m.t1)||(pick==='t2'&&m.w===m.t2))p+=3;
+      });
     });
-  });
-  return p;
+    return p;
+  }catch(e){return 0;}
 }
 function calcSpecialPts(sp,sr){
-  let p=0;
-  if(!sp||!sr)return p;
-  if(sr.goleador&&sp.goleador===sr.goleador)p+=10;
-  if(sr.campeon&&sp.campeon===sr.campeon)p+=10;
-  if(sr.segundo&&sp.segundo===sr.segundo)p+=5;
-  return p;
+  try{
+    let p=0;
+    if(!sp||!sr)return 0;
+    if(sr.goleador&&sp.goleador&&sp.goleador===sr.goleador)p+=10;
+    if(sr.campeon&&sp.campeon&&sp.campeon===sr.campeon)p+=10;
+    if(sr.segundo&&sp.segundo&&sp.segundo===sr.segundo)p+=5;
+    return p;
+  }catch(e){return 0;}
 }
 function pastDL(){return new Date()>new Date(DL_GRUPOS);}
 
@@ -794,7 +796,7 @@ function buildTabla(){
   const players=Object.keys(S.allUsers).map(u=>{
     const gPts=calcPts(S.allPicks[u]||{},S.results);
     const plPts=calcPlPts(S.allPlPicks[u]||{},S.bracket);
-    const spPts=calcSpecialPts(S.allSpecialPicks[u]||{},S.specialResults||{});
+    const spPts=calcSpecialPts((S.allSpecialPicks||{})[u]||{},(S.specialResults)||{});
     return {u,total:gPts+plPts+spPts,gPts,plPts,spPts,pred:Object.keys(S.allPicks[u]||{}).length};
   });
 
