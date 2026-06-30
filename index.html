@@ -346,7 +346,7 @@ function calcSpecialPts(sp,sr){
   if(!sp||!sr)return p;
   if(sr.goleador&&sp.goleador===sr.goleador)p+=10;
   if(sr.campeon&&sp.campeon===sr.campeon)p+=10;
-  else if(sr.segundo&&sp.campeon===sr.segundo)p+=5;
+  if(sr.segundo&&sp.segundo===sr.segundo)p+=5;
   return p;
 }
 function pastDL(){return new Date()>new Date(DL_GRUPOS);}
@@ -563,46 +563,50 @@ function buildHome(){
   }
   div.appendChild(golCard);
 
-  // Card Campeón
-  const champCard2=el('div',{cls:'card',style:{marginBottom:'10px'}});
-  champCard2.appendChild(el('div',{style:{fontSize:'13px',fontWeight:'700',color:'#1a2b4a',marginBottom:'4px'}},'🏆 Campeón del Mundial'));
-  champCard2.appendChild(el('div',{style:{fontSize:'11px',color:'#4a6080',marginBottom:'10px'}},'1° lugar: 10 pts · 2° lugar: 5 pts · Elección única, no modificable'));
-  const champGrid=el('div',{style:{display:'flex',flexWrap:'wrap',gap:'6px'}});
-  CAMPEONES.forEach(c=>{
-    const picked=sp.campeon===c;
-    const isChamp=sr.campeon===c;
-    const isSecond=sr.segundo===c;
-    const locked=!!sp.campeon;
-    let bg='#f8fafc',brd='#c8d4e4',col='#1a2b4a',sfx='';
-    if(isChamp&&picked){bg='#dcfce7';brd='#16a34a';col='#15803d';sfx=' 🏆+10';}
-    else if(isSecond&&picked){bg='#eff6ff';brd='#2563eb';col='#1d4ed8';sfx=' 🥈+5';}
-    else if(sr.campeon&&picked){bg='#fee2e2';brd='#dc2626';col='#b91c1c';sfx=' ✗';}
-    else if(picked){bg='#eff6ff';brd='#2563eb';col='#1d4ed8';}
-    const btn=el('button',{cls:'btn',style:{fontSize:'12px',fontWeight:'600',padding:'7px 10px',
-      display:'flex',alignItems:'center',gap:'6px',borderColor:brd,background:bg,color:col},disabled:locked});
-    const flag=document.createElement('img');
-    flag.src='https://flagcdn.com/w40/'+(FLAG_SP[c]||'un')+'.png';
-    flag.style.cssText='width:22px;height:14px;object-fit:cover;border-radius:2px;border:1px solid #dde3ed';
-    flag.onerror=()=>flag.style.display='none';
-    btn.appendChild(flag);
-    btn.appendChild(document.createTextNode(c+sfx));
-    btn.onclick=async()=>{
-      if(locked)return;
-      const upd={...sp,campeon:c};
-      S.specialPicks=upd;
-      await fbSetSpecialPicks(S.user.username,upd);
-      setState({tab:'home',specialPicks:upd});
-    };
-    champGrid.appendChild(btn);
-  });
-  champCard2.appendChild(champGrid);
-  if(sr.campeon&&sp.campeon){
-    const pts=sr.campeon===sp.campeon?10:sr.segundo===sp.campeon?5:0;
-    champCard2.appendChild(el('div',{style:{marginTop:'8px',fontSize:'12px',fontWeight:'600',
-      color:pts>0?'#15803d':'#b91c1c'}},
-      pts===10?'✓ Campeón correcto — +10 puntos':pts===5?'✓ 2° lugar correcto — +5 puntos':'✗ Incorrecto — Campeón: '+sr.campeon));
+  // Card Campeón (elección separada de campeón y subcampeón)
+  function mkChampCard(key,label,icon,pts,lockKey){
+    const card=el('div',{cls:'card',style:{marginBottom:'10px'}});
+    card.appendChild(el('div',{style:{fontSize:'13px',fontWeight:'700',color:'#1a2b4a',marginBottom:'2px'}},icon+' '+label));
+    card.appendChild(el('div',{style:{fontSize:'11px',color:'#4a6080',marginBottom:'10px'}},'Acertar suma '+pts+' puntos · Elección única, no modificable'));
+    const grid=el('div',{style:{display:'flex',flexWrap:'wrap',gap:'6px'}});
+    const resultKey=key==='campeon'?'campeon':'segundo';
+    CAMPEONES.forEach(c=>{
+      const picked=sp[key]===c;
+      const correct=sr[resultKey]===c&&picked;
+      const wrong=sr[resultKey]&&picked&&sr[resultKey]!==c;
+      const locked=!!sp[key];
+      let bg='#f8fafc',brd='#c8d4e4',col='#1a2b4a',sfx='';
+      if(correct){bg='#dcfce7';brd='#16a34a';col='#15803d';sfx=' ✓';}
+      else if(wrong){bg='#fee2e2';brd='#dc2626';col='#b91c1c';sfx=' ✗';}
+      else if(picked){bg='#eff6ff';brd='#2563eb';col='#1d4ed8';}
+      const btn=el('button',{cls:'btn',style:{fontSize:'12px',fontWeight:'600',padding:'7px 10px',
+        display:'flex',alignItems:'center',gap:'6px',borderColor:brd,background:bg,color:col},disabled:locked});
+      const flag=document.createElement('img');
+      flag.src='https://flagcdn.com/w40/'+(FLAG_SP[c]||'un')+'.png';
+      flag.style.cssText='width:22px;height:14px;object-fit:cover;border-radius:2px;border:1px solid #dde3ed';
+      flag.onerror=()=>flag.style.display='none';
+      btn.appendChild(flag);
+      btn.appendChild(document.createTextNode(c+sfx));
+      btn.onclick=async()=>{
+        if(locked)return;
+        const upd={...sp,[key]:c};
+        S.specialPicks=upd;
+        await fbSetSpecialPicks(S.user.username,upd);
+        setState({tab:'home',specialPicks:upd});
+      };
+      grid.appendChild(btn);
+    });
+    card.appendChild(grid);
+    if(sr[resultKey]&&sp[key]){
+      const ok=sr[resultKey]===sp[key];
+      card.appendChild(el('div',{style:{marginTop:'8px',fontSize:'12px',fontWeight:'600',
+        color:ok?'#15803d':'#b91c1c'}},
+        ok?'✓ Correcto — +'+pts+' puntos':'✗ Incorrecto — Fue: '+sr[resultKey]));
+    }
+    return card;
   }
-  div.appendChild(champCard2);
+  div.appendChild(mkChampCard('campeon','Campeón del Mundial','🏆',10,'campeon'));
+  div.appendChild(mkChampCard('segundo','Subcampeón del Mundial','🥈',5,'segundo'));
 
   const lb=el('button',{cls:'btn danger',style:{width:'100%'}},'Cerrar sesión');
   lb.onclick=()=>setState({user:null,tab:'home',picks:{},results:{},allUsers:{},allPicks:{},bracket:null,specialPicks:{},specialResults:{},allPlPicks:{}});
