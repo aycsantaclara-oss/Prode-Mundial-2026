@@ -265,6 +265,10 @@ function matchDay(d){
   return m[d]||999;
 }
 
+const GOLEADORES=['Lionel Messi','Vinícius Júnior','Kylian Mbappé','Ousmane Dembélé','Erling Haaland'];
+const CAMPEONES=['Argentina','España','Francia','Brasil','Portugal','Inglaterra'];
+const FLAG_SP={'Argentina':'ar','España':'es','Francia':'fr','Brasil':'br','Portugal':'pt','Inglaterra':'gb-eng'};
+
 const PL_ROUNDS=[
   {key:'r16',label:'16avos',n:16,dates:'1–4 Jul'},
   {key:'r8',label:'Octavos',n:8,dates:'5–8 Jul'},
@@ -285,6 +289,11 @@ async function fbGetUser(u){try{const d=await getDoc(doc(db,'users',u));return d
 async function fbSetUser(u,p){await setDoc(doc(db,'users',u),{password:p,createdAt:Date.now()});}
 async function fbGetPicks(u){try{const d=await getDoc(doc(db,'picks',u));return d.exists()?d.data().picks||{}:{};}catch{return {};}}
 async function fbSetPicks(u,picks){await setDoc(doc(db,'picks',u),{picks});}
+async function fbGetSpecialPicks(u){try{const d=await getDoc(doc(db,'specialpicks',u));return d.exists()?d.data():{}}catch{return {};}}
+async function fbSetSpecialPicks(u,data){await setDoc(doc(db,'specialpicks',u),data);}
+async function fbGetAllSpecialPicks(){try{const s=await getDocs(collection(db,'specialpicks'));const p={};s.forEach(d=>p[d.id]=d.data());return p;}catch{return {};}}
+async function fbGetSpecialResults(){try{const d=await getDoc(doc(db,'config','specialresults'));return d.exists()?d.data():{}}catch{return {};}}
+async function fbSetSpecialResults(data){await setDoc(doc(db,'config','specialresults'),data);}
 async function fbGetPlPicks(u){try{const d=await getDoc(doc(db,'plpicks',u));return d.exists()?d.data().picks||{}:{};}catch{return {};}}
 async function fbSetPlPicks(u,picks){await setDoc(doc(db,'plpicks',u),{picks});}
 async function fbGetAllPlPicks(){try{const s=await getDocs(collection(db,'plpicks'));const p={};s.forEach(d=>p[d.id]=d.data().picks||{});return p;}catch{return {};}}
@@ -332,6 +341,14 @@ function calcPlPts(plPicks,bracket){
   });
   return p;
 }
+function calcSpecialPts(sp,sr){
+  let p=0;
+  if(!sp||!sr)return p;
+  if(sr.goleador&&sp.goleador===sr.goleador)p+=10;
+  if(sr.campeon&&sp.campeon===sr.campeon)p+=10;
+  else if(sr.segundo&&sp.campeon===sr.segundo)p+=5;
+  return p;
+}
 function pastDL(){return new Date()>new Date(DL_GRUPOS);}
 
 // === DOM ===
@@ -353,7 +370,7 @@ function el(tag,attrs,...kids){
 }
 
 // === STATE ===
-let S={user:null,tab:'home',picks:{},plPicks:{},results:{},allUsers:{},allPicks:{},allPlPicks:{},bracket:null};
+let S={user:null,tab:'home',picks:{},plPicks:{},results:{},allUsers:{},allPicks:{},allPlPicks:{},bracket:null,specialPicks:{},specialResults:{},allSpecialPicks:{}};
 function setState(p){Object.assign(S,p);renderApp();}
 
 // === MAIN RENDER ===
@@ -395,15 +412,15 @@ function buildLogin(){
         if(!ud){err='Usuario no encontrado';draw();return;}
         if(ud.password!==pv){err='Contraseña incorrecta';draw();return;}
         await fbGetDeadlines();
-        const[picks,results,plPicks]=await Promise.all([fbGetPicks(uv.trim()),fbGetResults(),fbGetPlPicks(uv.trim())]);
-        setState({user:{username:uv.trim(),isAdmin:false},tab:'home',picks,results,plPicks});
+        const[picks,results,plPicks,specialPicks,specialResults]=await Promise.all([fbGetPicks(uv.trim()),fbGetResults(),fbGetPlPicks(uv.trim()),fbGetSpecialPicks(uv.trim()),fbGetSpecialResults()]);
+        setState({user:{username:uv.trim(),isAdmin:false},tab:'home',picks,results,plPicks,specialPicks,specialResults});
       }else{
         if(ud){err='Ese usuario ya existe';draw();return;}
         if(pv.length<4){err='Mínimo 4 caracteres';draw();return;}
         await fbSetUser(uv.trim(),pv);
         await fbGetDeadlines();
-        const[results,plPicks]=await Promise.all([fbGetResults(),fbGetPlPicks(uv.trim())]);
-        setState({user:{username:uv.trim(),isAdmin:false},tab:'home',picks:{},results,plPicks:{}});
+        const[results,plPicks,specialResults]=await Promise.all([fbGetResults(),fbGetPlPicks(uv.trim()),fbGetSpecialResults()]);
+        setState({user:{username:uv.trim(),isAdmin:false},tab:'home',picks:{},results,plPicks:{},specialPicks:{},specialResults});
       }
     };
     card.appendChild(sb);
@@ -435,11 +452,14 @@ function buildApp(){
       await fbGetDeadlines();
       const results=await fbGetResults();
       if(t.id==='tabla'||t.id==='admin'){
-        const[allUsers,allPicks,allPlPicks,bracket]=await Promise.all([fbGetAllUsers(),fbGetAllPicks(),fbGetAllPlPicks(),fbGetBracket()]);
-        setState({tab:t.id,results,allUsers,allPicks,allPlPicks,bracket});
+        const[allUsers,allPicks,allPlPicks,bracket,allSpecialPicks,specialResults]=await Promise.all([fbGetAllUsers(),fbGetAllPicks(),fbGetAllPlPicks(),fbGetBracket(),fbGetAllSpecialPicks(),fbGetSpecialResults()]);
+        setState({tab:t.id,results,allUsers,allPicks,allPlPicks,bracket,allSpecialPicks,specialResults});
       }else if(t.id==='playoff'){
         const[bracket,plPicks]=await Promise.all([fbGetBracket(),fbGetPlPicks(S.user.username)]);
         setState({tab:t.id,results,bracket,plPicks});
+      }else if(t.id==='home'){
+        const[results,specialPicks,specialResults]=await Promise.all([fbGetResults(),fbGetSpecialPicks(S.user.username),fbGetSpecialResults()]);
+        setState({tab:t.id,results,specialPicks,specialResults});
       }else{
         setState({tab:t.id,results});
       }
@@ -507,8 +527,85 @@ function buildHome(){
       el('li',null,'Cierre 16avos: '+fmtDL(DL_PL.r16))
     )
   ));
+    // ── PREDICCIONES ESPECIALES ─────────────────────────────────
+  const sp=S.specialPicks||{};
+  const sr=S.specialResults||{};
+
+  // Card Goleador
+  const golCard=el('div',{cls:'card',style:{marginBottom:'10px'}});
+  golCard.appendChild(el('div',{style:{fontSize:'13px',fontWeight:'700',color:'#1a2b4a',marginBottom:'4px'}},'👟 Goleador del Mundial'));
+  golCard.appendChild(el('div',{style:{fontSize:'11px',color:'#4a6080',marginBottom:'10px'}},'Acertar suma 10 puntos · Elección única, no modificable'));
+  const golGrid=el('div',{style:{display:'flex',flexWrap:'wrap',gap:'6px'}});
+  GOLEADORES.forEach(g=>{
+    const picked=sp.goleador===g;
+    const correct=sr.goleador&&sr.goleador===g&&picked;
+    const wrong=sr.goleador&&picked&&sr.goleador!==g;
+    const locked=!!sp.goleador;
+    const btn=el('button',{cls:'btn',style:{fontSize:'12px',fontWeight:'600',padding:'7px 12px',
+      borderColor:correct?'#16a34a':wrong?'#dc2626':picked?'#2563eb':'#c8d4e4',
+      background:correct?'#dcfce7':wrong?'#fee2e2':picked?'#dbeafe':'#f8fafc',
+      color:correct?'#15803d':wrong?'#b91c1c':picked?'#1d4ed8':'#1a2b4a'},disabled:locked},
+      g+(correct?' ✓':wrong?' ✗':''));
+    btn.onclick=async()=>{
+      if(locked)return;
+      const upd={...sp,goleador:g};
+      S.specialPicks=upd;
+      await fbSetSpecialPicks(S.user.username,upd);
+      setState({tab:'home',specialPicks:upd});
+    };
+    golGrid.appendChild(btn);
+  });
+  golCard.appendChild(golGrid);
+  if(sr.goleador&&sp.goleador){
+    golCard.appendChild(el('div',{style:{marginTop:'8px',fontSize:'12px',fontWeight:'600',
+      color:sr.goleador===sp.goleador?'#15803d':'#b91c1c'}},
+      sr.goleador===sp.goleador?'✓ Correcto — +10 puntos':'✗ Incorrecto — Goleador: '+sr.goleador));
+  }
+  div.appendChild(golCard);
+
+  // Card Campeón
+  const champCard2=el('div',{cls:'card',style:{marginBottom:'10px'}});
+  champCard2.appendChild(el('div',{style:{fontSize:'13px',fontWeight:'700',color:'#1a2b4a',marginBottom:'4px'}},'🏆 Campeón del Mundial'));
+  champCard2.appendChild(el('div',{style:{fontSize:'11px',color:'#4a6080',marginBottom:'10px'}},'1° lugar: 10 pts · 2° lugar: 5 pts · Elección única, no modificable'));
+  const champGrid=el('div',{style:{display:'flex',flexWrap:'wrap',gap:'6px'}});
+  CAMPEONES.forEach(c=>{
+    const picked=sp.campeon===c;
+    const isChamp=sr.campeon===c;
+    const isSecond=sr.segundo===c;
+    const locked=!!sp.campeon;
+    let bg='#f8fafc',brd='#c8d4e4',col='#1a2b4a',sfx='';
+    if(isChamp&&picked){bg='#dcfce7';brd='#16a34a';col='#15803d';sfx=' 🏆+10';}
+    else if(isSecond&&picked){bg='#eff6ff';brd='#2563eb';col='#1d4ed8';sfx=' 🥈+5';}
+    else if(sr.campeon&&picked){bg='#fee2e2';brd='#dc2626';col='#b91c1c';sfx=' ✗';}
+    else if(picked){bg='#eff6ff';brd='#2563eb';col='#1d4ed8';}
+    const btn=el('button',{cls:'btn',style:{fontSize:'12px',fontWeight:'600',padding:'7px 10px',
+      display:'flex',alignItems:'center',gap:'6px',borderColor:brd,background:bg,color:col},disabled:locked});
+    const flag=document.createElement('img');
+    flag.src='https://flagcdn.com/w40/'+(FLAG_SP[c]||'un')+'.png';
+    flag.style.cssText='width:22px;height:14px;object-fit:cover;border-radius:2px;border:1px solid #dde3ed';
+    flag.onerror=()=>flag.style.display='none';
+    btn.appendChild(flag);
+    btn.appendChild(document.createTextNode(c+sfx));
+    btn.onclick=async()=>{
+      if(locked)return;
+      const upd={...sp,campeon:c};
+      S.specialPicks=upd;
+      await fbSetSpecialPicks(S.user.username,upd);
+      setState({tab:'home',specialPicks:upd});
+    };
+    champGrid.appendChild(btn);
+  });
+  champCard2.appendChild(champGrid);
+  if(sr.campeon&&sp.campeon){
+    const pts=sr.campeon===sp.campeon?10:sr.segundo===sp.campeon?5:0;
+    champCard2.appendChild(el('div',{style:{marginTop:'8px',fontSize:'12px',fontWeight:'600',
+      color:pts>0?'#15803d':'#b91c1c'}},
+      pts===10?'✓ Campeón correcto — +10 puntos':pts===5?'✓ 2° lugar correcto — +5 puntos':'✗ Incorrecto — Campeón: '+sr.campeon));
+  }
+  div.appendChild(champCard2);
+
   const lb=el('button',{cls:'btn danger',style:{width:'100%'}},'Cerrar sesión');
-  lb.onclick=()=>setState({user:null,tab:'home',picks:{},results:{},allUsers:{},allPicks:{},bracket:null});
+  lb.onclick=()=>setState({user:null,tab:'home',picks:{},results:{},allUsers:{},allPicks:{},bracket:null,specialPicks:{},specialResults:{},allPlPicks:{}});
   div.appendChild(lb);
   return div;
 }
@@ -693,7 +790,8 @@ function buildTabla(){
   const players=Object.keys(S.allUsers).map(u=>{
     const gPts=calcPts(S.allPicks[u]||{},S.results);
     const plPts=calcPlPts(S.allPlPicks[u]||{},S.bracket);
-    return {u,total:gPts+plPts,gPts,plPts,pred:Object.keys(S.allPicks[u]||{}).length};
+    const spPts=calcSpecialPts(S.allSpecialPicks[u]||{},S.specialResults||{});
+    return {u,total:gPts+plPts+spPts,gPts,plPts,spPts,pred:Object.keys(S.allPicks[u]||{}).length};
   });
 
   if(!players.length){
@@ -750,9 +848,9 @@ function buildTabla(){
         el('div',{style:{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'2px'}},
           el('span',{cls:'pts'},mainPts+' pts'),
           el('span',{style:{fontSize:'10px',color:'#3d5a7a'}},
-            sortBy==='total'?'G:'+gPts+' PO:'+plPts:
-            sortBy==='grupos'?'PO:'+plPts+' Total:'+total:
-            'G:'+gPts+' Total:'+total
+            sortBy==='total'?'G:'+gPts+' PO:'+plPts+' E:'+spPts:
+            sortBy==='grupos'?'PO:'+plPts+' E:'+spPts+' T:'+total:
+            'G:'+gPts+' E:'+spPts+' T:'+total
           )
         )
       );
@@ -827,6 +925,58 @@ function buildAdmin(){
   };
   div.appendChild(el('div',{style:{display:'flex',gap:'8px',marginTop:'10px'}},saveResBtn,resetBtn));
   div.appendChild(el('div',{cls:'alert warn',style:{marginTop:'8px',fontSize:'11px'}},'⚠️ Resetear borra resultados Y predicciones de todos los usuarios.'));
+
+  div.appendChild(el('div',{cls:'sep'}));
+
+  // -- PREDICCIONES ESPECIALES --
+  div.appendChild(el('div',{cls:'sec-title'},'Resultados especiales'));
+  const spAlert=el('div',{cls:'alert success',style:{display:'none'}},'✓ Guardado');
+  div.appendChild(spAlert);
+  const srNow=S.specialResults||{};
+
+  const spCard=el('div',{cls:'card'});
+
+  // Goleador
+  spCard.appendChild(el('div',{style:{fontSize:'12px',color:'#4a6080',marginBottom:'5px',fontWeight:'600'}},'👟 Goleador del Mundial'));
+  const golSel=el('select',{cls:'rsel',style:{width:'100%',marginBottom:'12px',padding:'7px 10px',fontSize:'13px'}});
+  [['','— Sin definir'],...GOLEADORES.map(g=>[g,g])].forEach(([v,l])=>{
+    const o=el('option',{value:v},l);
+    if(srNow.goleador===v)o.selected=true;
+    golSel.appendChild(o);
+  });
+  spCard.appendChild(golSel);
+
+  // Campeón (1° y 2°)
+  spCard.appendChild(el('div',{style:{fontSize:'12px',color:'#4a6080',marginBottom:'5px',fontWeight:'600'}},'🏆 Campeón del Mundial (1° lugar)'));
+  const champSel=el('select',{cls:'rsel',style:{width:'100%',marginBottom:'12px',padding:'7px 10px',fontSize:'13px'}});
+  [['','— Sin definir'],...CAMPEONES.map(c=>[c,c])].forEach(([v,l])=>{
+    const o=el('option',{value:v},l);
+    if(srNow.campeon===v)o.selected=true;
+    champSel.appendChild(o);
+  });
+  spCard.appendChild(champSel);
+
+  spCard.appendChild(el('div',{style:{fontSize:'12px',color:'#4a6080',marginBottom:'5px',fontWeight:'600'}},'🥈 Subcampeón (2° lugar)'));
+  const secondSel=el('select',{cls:'rsel',style:{width:'100%',marginBottom:'12px',padding:'7px 10px',fontSize:'13px'}});
+  [['','— Sin definir'],...CAMPEONES.map(c=>[c,c])].forEach(([v,l])=>{
+    const o=el('option',{value:v},l);
+    if(srNow.segundo===v)o.selected=true;
+    secondSel.appendChild(o);
+  });
+  spCard.appendChild(secondSel);
+
+  const saveSpBtn=el('button',{cls:'btn success',style:{width:'100%'}},'Guardar resultados especiales');
+  saveSpBtn.onclick=async()=>{
+    saveSpBtn.disabled=true;saveSpBtn.textContent='Guardando...';
+    const data={goleador:golSel.value,campeon:champSel.value,segundo:secondSel.value};
+    await fbSetSpecialResults(data);
+    S.specialResults=data;
+    saveSpBtn.disabled=false;saveSpBtn.textContent='Guardar resultados especiales';
+    spAlert.textContent='✓ Resultados especiales guardados';spAlert.style.display='block';
+    setTimeout(()=>spAlert.style.display='none',2500);
+  };
+  spCard.appendChild(saveSpBtn);
+  div.appendChild(spCard);
 
   div.appendChild(el('div',{cls:'sep'}));
 
